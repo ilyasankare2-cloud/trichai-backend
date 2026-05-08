@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-engine       = InferenceEngine("model/phytolens_v1.onnx")
+engine       = InferenceEngine("model/phytolens_v2.onnx")
 START_TIME   = time.time()
 VALID_LABELS = {"bud", "hash", "other", "plant"}
 MAX_BYTES    = 10 * 1024 * 1024  # 10 MB

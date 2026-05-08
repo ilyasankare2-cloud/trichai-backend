@@ -22,11 +22,11 @@ CLASS_INFO = {
     },
     2: {
         "label":      "other",
-        "display":    "Otro producto",
-        "thc_min":    5,
-        "thc_max":    90,
-        "description": "Extracto, aceite u otro derivado del cannabis.",
-        "varieties":  ["BHO", "Rosin", "Cera", "Shatter", "Aceite CBD", "Tintura"],
+        "display":    "No detectado",
+        "thc_min":    0,
+        "thc_max":    0,
+        "description": "No se ha detectado cannabis en la imagen.",
+        "varieties":  [],
     },
     3: {
         "label":      "plant",
