@@ -54,7 +54,7 @@ else:
 # Model lives in R2 under MODEL_KEY (e.g. "models/phytolens_v2.onnx") and is
 # downloaded on startup to MODEL_CACHE if not already present. To deploy a new
 # model: upload to R2 then change MODEL_KEY env var + restart Railway.
-MODEL_KEY   = os.getenv("MODEL_KEY", "models/phytolens_v2.onnx")
+MODEL_KEY   = os.getenv("MODEL_KEY", "phytolens_v2.onnx")
 MODEL_CACHE = os.path.join("model", "cache", os.path.basename(MODEL_KEY))
 ensure_model_local(MODEL_CACHE, MODEL_KEY, s3, R2_BUCKET)
 engine = InferenceEngine(MODEL_CACHE)
