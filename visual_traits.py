@@ -58,6 +58,17 @@ def analyze(image_bytes: bytes) -> dict:
     else:
         cure = "Fresca"
 
+    # Hash-specific derived fields (previously computed client-side, see TD-015).
+    if roughness < 25:
+        uniformity = "Uniforme"
+    elif roughness < 45:
+        uniformity = "Media"
+    else:
+        uniformity = "Irregular"
+
+    gr, gg, gb = avg_rgb
+    green_tint = gg > gr and gg > gb + 10
+
     return {
         "brightness":        round(brightness, 1),
         "roughness":         round(roughness, 1),
@@ -68,4 +79,6 @@ def analyze(image_bytes: bytes) -> dict:
         "dominant_color":    avg_rgb,
         "cure":              cure,
         "warmth":            round(warmth, 1),
+        "uniformity":        uniformity,
+        "green_tint":        green_tint,
     }
