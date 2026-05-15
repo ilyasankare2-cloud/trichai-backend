@@ -242,6 +242,41 @@ def save_contribution(data: bytes, label: str, ext: str) -> str:
     return filename
 
 
+def save_feedback(data: bytes, true_label: str, predicted: str,
+                  confidence: float, is_correct: bool, ext: str) -> str:
+    """Store feedback in R2 with HTTP metadata (no sidecar JSON).
+    Path: feedback/{true_label}/{uuid}.{ext}. The 'true_label' is the
+    correct class — either user-confirmed (is_correct=True) or user-corrected
+    (is_correct=False)."""
+    filename = f"feedback/{true_label}/{uuid.uuid4().hex}.{ext}"
+    metadata = {
+        "predicted":   predicted,
+        "real":        true_label,
+        "confidence":  f"{confidence:.4f}",
+        "is_correct":  "1" if is_correct else "0",
+        "ts":          datetime.now(timezone.utc).isoformat(),
+    }
+    if USE_R2:
+        s3.put_object(
+            Bucket=R2_BUCKET, Key=filename, Body=data,
+            ContentType=f"image/{ext}", Metadata=metadata,
+        )
+    else:
+        local_dir = os.path.join(CONTRIB_DIR, "feedback", true_label)
+        os.makedirs(local_dir, exist_ok=True)
+        with open(os.path.join(CONTRIB_DIR, filename), "wb") as f:
+            f.write(data)
+    return filename
+
+
+def record_feedback(is_correct: bool, predicted: str, real: str):
+    _incr("trichai:total_feedback")
+    _incr("trichai:feedback_correct" if is_correct else "trichai:feedback_incorrect")
+    if not is_correct:
+        # Track which (predicted -> real) confusions happen most often.
+        _hincr("trichai:confusions", f"{predicted}->{real}")
+
+
 # ── ENDPOINTS ─────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -292,6 +327,44 @@ async def contribute(
     return {"success": True, "saved": saved, "label": label}
 
 
+@app.post("/feedback")
+async def feedback(
+    request: Request,
+    file: UploadFile = File(...),
+    predicted: str = Form(...),
+    is_correct: bool = Form(...),
+    real_label: str = Form(""),
+    confidence: float = Form(0.0),
+):
+    """Receives user feedback on a previous /analyze result.
+    - is_correct=True  -> the predicted label was right; store as feedback for that class.
+    - is_correct=False -> user provides real_label; store as feedback for real_label
+                          (high-signal correction).
+    The image is stored in R2 under feedback/{true_label}/{uuid}.{ext} with
+    metadata identifying the original prediction and confidence."""
+    check_rate(request)
+    if predicted not in VALID_LABELS:
+        raise HTTPException(400, f"predicted inválido. Usa: {', '.join(VALID_LABELS)}")
+    if is_correct:
+        true_label = predicted
+    else:
+        if real_label not in VALID_LABELS:
+            raise HTTPException(400, f"real_label inválido. Usa: {', '.join(VALID_LABELS)}")
+        true_label = real_label
+    if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        raise HTTPException(400, "Formato no soportado. Usa JPG o PNG.")
+    contents = await file.read()
+    if len(contents) > MAX_BYTES:
+        raise HTTPException(400, "Imagen demasiado grande. Máximo 10MB.")
+    validate_image_magic(contents)
+    ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp"):
+        ext = "jpg"
+    saved = save_feedback(contents, true_label, predicted, confidence, is_correct, ext)
+    record_feedback(is_correct, predicted, true_label)
+    return {"success": True, "saved": saved}
+
+
 @app.get("/contribute/stats")
 def contribute_stats(request: Request):
     require_stats_key(request)
@@ -300,6 +373,17 @@ def contribute_stats(request: Request):
     stats["total"]   = a["total_contributions"]
     stats["storage"] = "r2" if USE_R2 else "local"
     return stats
+
+
+@app.get("/feedback/stats")
+def feedback_stats(request: Request):
+    require_stats_key(request)
+    return {
+        "total":        _get("trichai:total_feedback"),
+        "correct":      _get("trichai:feedback_correct"),
+        "incorrect":    _get("trichai:feedback_incorrect"),
+        "confusions":   _hgetall("trichai:confusions"),
+    }
 
 
 @app.get("/stats")
