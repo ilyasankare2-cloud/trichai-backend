@@ -15,6 +15,8 @@ from visual_traits import analyze as analyze_traits
 app = FastAPI(title="TrichAI API", version="1.6.0")
 
 _default_origins = (
+    "https://trichai.xyz,"
+    "https://www.trichai.xyz,"
     "https://phytolens-frontend.vercel.app,"
     "https://trichai-landing.vercel.app,"
     "http://localhost:3000"
